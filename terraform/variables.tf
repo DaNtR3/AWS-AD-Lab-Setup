@@ -10,7 +10,7 @@ variable "allowed_ip" {
 
 variable "windows_ami" {
   description = "Windows Server AMI"
-  default     = "ami-0568a51f9c63f2f7a" # Windows Server 2022 (us-east-1)
+  default     = "ami-0159172a5a821bafd" # Windows Server 2022 (us-east-1)
 }
 
 variable "keypair_name" {
@@ -28,4 +28,9 @@ variable "netbios_name" {
 variable "ad_password" {
   default     = "EnterYourPassword"
   description = "SafeMode Administrator Password"
+}
+
+variable "instance_type" {
+  default     = "t3.small"
+  description = "Free-tier eligible instance"
 }

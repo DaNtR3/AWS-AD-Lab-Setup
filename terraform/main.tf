@@ -109,7 +109,7 @@ resource "aws_security_group" "ad_sg" {
 # -----------------------------
 resource "aws_instance" "dc" {
   ami           = var.windows_ami
-  instance_type = "t3.medium"
+  instance_type = var.instance_type
   subnet_id     = aws_subnet.public.id
   security_groups = [
     aws_security_group.ad_sg.id
@@ -117,7 +117,7 @@ resource "aws_instance" "dc" {
 
   key_name = var.keypair_name
 
-  user_data = templatefile("install_ADDS.ps1.tpl", { # Runs AD install script
+  user_data = templatefile("powershell/ad-setup.ps1.tpl", { # Runs AD install script
   domain_name = var.domain_name
   netbios_name = var.netbios_name
   ad_password = var.ad_password
