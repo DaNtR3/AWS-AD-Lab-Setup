@@ -47,16 +47,65 @@ This project automates the deployment of a Windows Active Directory domain on AW
 AWS-AD-Lab-Setup/
 ├── README.md                 # This file
 ├── LICENSE                   # MIT License
-├── terraform/
-│   ├── main.tf              # VPC, subnet, security groups, EC2 instance
-│   ├── variables.tf         # Input variables and defaults
-│   ├── output.tf            # Output values (currently empty)
-│   └── terraform.tf         # Terraform version and provider requirements
-└── powershell/
-    └── ad-setup.ps1.tpl     # PowerShell script for AD configuration
+└── terraform/
+    ├── main.tf              # VPC, subnet, security groups, EC2 instance, IAM roles
+    ├── variables.tf         # Input variables and defaults
+    ├── output.tf            # Output values
+    ├── terraform.tf         # Terraform version and provider requirements
+    └── powershell/
+        └── ad-setup.ps1.tpl # Two-phase PowerShell script for AD configuration
 ```
 
-## Configuration
+## PowerShell Script Overview
+
+The `ad-setup.ps1.tpl` script automates the entire Active Directory setup process in **two phases**:
+
+### Phase 1: Initial Setup (Runs on EC2 Launch)
+
+Executed automatically when the EC2 instance starts via Terraform user_data:
+
+1. **Logging Infrastructure** - Creates `C:\Logs\` directory with logging functions for debugging
+2. **Disable Network Level Authentication** - Modifies registry to disable NLA for RDP access
+3. **Install AD Features** - Installs Active Directory Domain Services with management tools
+4. **Create AD Forest** - Runs `Install-ADDSForest` to create the domain, which triggers an automatic server restart
+5. **Create Phase 2 Script** - Generates the continuation script that will run after reboot
+6. **Register Scheduled Task** - Creates "AD-Setup-Phase2" scheduled task to execute at startup with SYSTEM privileges
+7. **Restart Server** - Initiates server restart
+
+### Phase 2: Post-Reboot Configuration (Runs via Scheduled Task)
+
+After server restart, the scheduled task automatically executes Phase 2:
+
+1. **Wait for Services** - Waits 60 seconds for Active Directory Web Services (ADWS) to initialize
+2. **Verify AD Responsiveness** - Polls AD using `Get-ADRootDSE` and `Get-ADDomain` up to 30 times (5 minute timeout)
+3. **Create Organizational Units**:
+   - `SuperHeroes` - Container for user accounts
+   - `SuperGroups` - Container for security groups
+
+4. **Create Security Groups** (Superhero Teams):
+   - Avengers, XMen, Guardians, Fantastic4, Defenders
+
+5. **Create User Accounts** (5 Marvel characters):
+   - Tony Stark (Iron Man)
+   - Steve Rogers (Captain America)
+   - Bruce Banner (Hulk)
+   - Peter Parker (Spider-Man)
+   - Natasha Romanoff (Black Widow)
+
+6. **Assign Users to Groups** - Each user added to their corresponding team group
+7. **Cleanup** - Unregisters the scheduled task upon completion
+
+### Why Two Phases?
+
+Active Directory Forest installation requires a server restart before you can interact with AD services. The two-phase approach solves this:
+
+- **Phase 1** completes pre-reboot setup (install features, create forest)
+- **Server restarts automatically**
+- **Phase 2** completes post-reboot setup (create OUs, groups, users)
+
+This enables **fully automated setup** from a single `terraform apply` command without manual intervention. Windows scheduled tasks persist across reboots and execute with elevated privileges, allowing Phase 2 to complete the configuration automatically.
+
+
 
 ### Variables
 
@@ -74,25 +123,29 @@ Edit `terraform/variables.tf` to customize your deployment:
 
 ## Sample Active Directory Objects
 
-The PowerShell script creates the following structure:
+The PowerShell script creates the following structure with a superhero theme:
 
 ### Organizational Units (OUs)
-- `Users` - Contains user accounts
-- `Groups` - Contains security groups
+- `SuperHeroes` - Contains superhero user accounts
+- `SuperGroups` - Contains superhero security groups
 
-### Users
-1. Alice Johnson (alicej@example.local)
-2. Bob Smith (bobsmith@example.local)
-3. Charlie Lee (charliel@example.local)
-4. Dana White (danaw@example.local)
-5. Evan Brown (evanb@example.local)
+### Users (Avengers & Allies)
+1. Tony Stark (tonystark@example.local) - Iron Man
+2. Steve Rogers (steverogers@example.local) - Captain America
+3. Bruce Banner (brucebanner@example.local) - Hulk
+4. Peter Parker (peterparker@example.local) - Spider-Man
+5. Natasha Romanoff (natasha@example.local) - Black Widow
 
 **Default Password**: `Welcome123!`
 
-### Groups
-- Group1 through Group5 (Global Security Groups)
+### Groups (Superhero Teams)
+- **Avengers** - Tony Stark
+- **XMen** - Steve Rogers
+- **Guardians** - Bruce Banner
+- **Fantastic4** - Peter Parker
+- **Defenders** - Natasha Romanoff
 
-Each user is automatically added to their corresponding group (Alice → Group1, Bob → Group2, etc.)
+Each user is automatically added to their corresponding group.
 
 ## Usage
 
