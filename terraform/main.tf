@@ -105,6 +105,40 @@ resource "aws_security_group" "ad_sg" {
 }
 
 # -----------------------------
+# IAM Role and Instance Profile
+# -----------------------------
+resource "aws_iam_role" "ec2_ad_role" {
+  name = "ad-lab-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "ad-lab-ec2-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_policy" {
+  role       = aws_iam_role.ec2_ad_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_ad_profile" {
+  name = "ad-lab-ec2-profile"
+  role = aws_iam_role.ec2_ad_role.name
+}
+
+# -----------------------------
 # Windows EC2 Instance
 # -----------------------------
 resource "aws_instance" "dc" {
@@ -116,12 +150,18 @@ resource "aws_instance" "dc" {
   ]
 
   key_name = var.keypair_name
+  iam_instance_profile = aws_iam_instance_profile.ec2_ad_profile.name
 
-  user_data = templatefile("powershell/ad-setup.ps1.tpl", { # Runs AD install script
-  domain_name = var.domain_name
-  netbios_name = var.netbios_name
-  ad_password = var.ad_password
-})
+  user_data = base64encode(<<-EOF
+    <powershell>
+    ${templatefile("${path.module}/powershell/ad-setup.ps1.tpl", {
+      domain_name  = var.domain_name
+      netbios_name = var.netbios_name
+      ad_password  = var.ad_password
+    })}
+    </powershell>
+  EOF
+  )
 
   tags = {
     Name = "AD-DomainController"

@@ -10,7 +10,7 @@ variable "allowed_ip" {
 
 variable "windows_ami" {
   description = "Windows Server AMI"
-  default     = "ami-0159172a5a821bafd" # Windows Server 2022 (us-east-1)
+  default     = "ami-07ef6937cf3893b6b" # Windows Server 2019 base (us-east-1)
 }
 
 variable "keypair_name" {
