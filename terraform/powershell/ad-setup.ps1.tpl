@@ -183,6 +183,47 @@ try {
         Log-Message "Added `$userSam to `$groupName"
     }
     
+     Log-Message "=========================================="
+    Log-Message "Phase 2: Setting Up Saviynt Service Account"
+    Log-Message "=========================================="
+    
+    # Generate strong random password for SaviyntSA
+    Log-Message "Generating strong password for SaviyntSA..."
+    `$passwordLength = 24
+    `$charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
+    `$random = New-Object System.Random
+    `$saviyntPassword = ''
+    for (`$i = 0; `$i -lt `$passwordLength; `$i++) {
+        `$saviyntPassword += `$charset[[int](`$random.NextDouble() * `$charset.Length)]
+    }
+    
+    # Create SaviyntSA user in CN=Users
+    Log-Message "Creating SaviyntSA user account in CN=Users,`$dcPath..."
+    `$saviyntSecPassword = ConvertTo-SecureString `$saviyntPassword -AsPlainText -Force
+    New-ADUser -Name "SaviyntSA" -SamAccountName "SaviyntSA" -UserPrincipalName "SaviyntSA@$continueDomainName" -AccountPassword `$saviyntSecPassword -Enabled `$true -Path ("CN=Users," + `$dcPath) -Description "Saviynt Service Account for IGA Integration" -ErrorAction Stop
+    Log-Message "Created SaviyntSA user account at CN=SaviyntSA,CN=Users,`$dcPath"
+    
+    # Set password to never expire
+    Log-Message "Setting SaviyntSA password to never expire..."
+    Set-ADUser -Identity "SaviyntSA" -PasswordNeverExpires `$true -ErrorAction Stop
+    Log-Message "Password expiration disabled for SaviyntSA"
+    
+    # Create IGA_Saviynt_Group in SuperGroups OU
+    Log-Message "Creating IGA_Saviynt_Group in SuperGroups OU..."
+    New-ADGroup -Name "IGA_Saviynt_Group" -GroupScope Global -Path ("OU=SuperGroups," + `$dcPath) -Description "Group for Saviynt IGA Service Accounts" -ErrorAction Stop
+    Log-Message "Created IGA_Saviynt_Group"
+    
+    # Add SaviyntSA to IGA_Saviynt_Group
+    Log-Message "Adding SaviyntSA to IGA_Saviynt_Group..."
+    Add-ADGroupMember -Identity "IGA_Saviynt_Group" -Members "SaviyntSA" -ErrorAction Stop
+    Log-Message "Successfully added SaviyntSA to IGA_Saviynt_Group"
+
+    Log-Message "Saviynt password is: `$saviyntPassword"
+    
+    Log-Message "=========================================="
+    Log-Message "Saviynt Service Account Setup Completed!"
+    Log-Message "=========================================="
+    
     Log-Message "=========================================="
     Log-Message "Active Directory Setup Completed Successfully!"
     Log-Message "=========================================="
@@ -198,7 +239,6 @@ try {
     exit 1
 }
 "@
-
     # Write continuation script to file
     Set-Content -Path $ContinuationScriptPath -Value $continuationScript -ErrorAction Stop
     Log-Message "Continuation script created at $ContinuationScriptPath"
@@ -206,7 +246,7 @@ try {
     # Register scheduled task to run after reboot
     Log-Message "Registering scheduled task to run Phase 2 after reboot..."
     $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ContinuationScriptPath`""
-    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $trigger = New-ScheduledTaskTrigger -AtStartup -RandomDelay (New-TimeSpan -Seconds 120)
     $principal = New-ScheduledTaskPrincipal -UserID "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName "AD-Setup-Phase2" -Action $action -Trigger $trigger -Principal $principal -Force -ErrorAction Stop
     Log-Message "Scheduled task registered successfully"
